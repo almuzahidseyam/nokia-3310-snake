@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import "tailwindcss";
+
+html, body, #root { height: 100%; margin: 0; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+body { background: #0a0c0e; }
+
+.font-pixel { font-family: 'Press Start 2P', ui-monospace, monospace; }
+
+.pixel-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #9bbc0f;
+  background: #0f380f;
+  padding: 10px 16px;
+  border: 0;
+  box-shadow: 3px 3px 0 #306230;
+  cursor: pointer;
+  transition: transform .08s;
+}
+.pixel-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #306230; }
+
+.soft-key {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #cbd5e1;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #4a525e, #2b3038);
+  box-shadow: 0 3px 0 #14171b, inset 0 1px 0 rgba(255,255,255,.15);
+  transition: transform .08s;
+}
+.soft-key:active { transform: translateY(2px); box-shadow: 0 1px 0 #14171b; }
+
+@keyframes bump { 0% { transform: scale(1.35); color: #fef08a; } 100% { transform: scale(1); } }
+.animate-bump { animation: bump .25s ease-out; transform-origin: left center; }
+
+@keyframes blink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .35; } }
+.animate-blink { animation: blink 1s steps(1) infinite; }
+
+@keyframes wiggle { 0%,100% { transform: rotate(-2deg) scale(1); } 50% { transform: rotate(2deg) scale(1.06); } }
+.animate-wiggle { animation: wiggle 1.4s ease-in-out infinite; }
+
+@keyframes shake { 0%,100% { transform: translateX(0);} 20% { transform: translateX(-4px);} 40% { transform: translateX(4px);} 60% { transform: translateX(-3px);} 80% { transform: translateX(3px);} }
+.animate-shake { animation: shake .4s ease-out; }
+
+@keyframes fadein { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+.animate-fadein { animation: fadein .2s ease-out; }
