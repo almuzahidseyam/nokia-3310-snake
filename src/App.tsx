@@ -167,12 +167,23 @@ export default function App() {
             {screen === 'start' && (
               <Overlay>
                 <div className="text-[#0f380f] text-2xl sm:text-3xl mb-1 animate-wiggle">SNAKE</div>
-                <div className="text-[#306230] text-[9px] mb-5">II · 3310 EDITION</div>
+                <div className="text-[#306230] text-[9px] mb-3">II · 3310 EDITION</div>
+                <div className="flex flex-col items-center gap-1 mb-4">
+                  <div className="text-[#0f380f] text-[8px]">PLAYER NAME</div>
+                  <input value={name} maxLength={8} placeholder="YOU"
+                    onChange={e => {
+                      const val = e.target.value.toUpperCase();
+                      setName(val);
+                      localStorage.setItem('nokia-snake-name', val.trim() || 'YOU');
+                    }}
+                    onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') startGame(); }}
+                    className="bg-[#9bbc0f] border-2 border-[#0f380f] text-[#0f380f] text-[10px] p-1 w-24 text-center outline-none uppercase placeholder:text-[#306230]/50 focus:bg-[#a7c93a]" />
+                </div>
                 <button onClick={startGame} className="pixel-btn animate-blink">▶ PRESS START</button>
-                <div className="text-[#306230] text-[8px] mt-5 leading-relaxed">
+                <div className="text-[#306230] text-[8px] mt-4 leading-relaxed">
                   ARROWS / WASD · SWIPE<br />SPACE PAUSE · R RESTART
                 </div>
-                {scores.length > 0 && <ScoreTable scores={scores.slice(0, 5)} />}
+                {scores.length > 0 && <ScoreTable scores={scores.slice(0, 3)} />}
               </Overlay>
             )}
             {screen === 'paused' && (

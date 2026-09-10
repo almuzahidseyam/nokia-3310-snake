@@ -3,7 +3,7 @@
   "description": "A web-based clone of the classic Snake II from the Nokia 3310",
   "author": "almuzahidseyam",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -7,7 +7,7 @@ A web-based clone of the classic Snake II from the Nokia 3310. Built with React,
 - 🔊 Original Snake II mechanics and sound effects.
 - 📱 Touch swipe and D-Pad controls for mobile devices.
 - ⌨️ Keyboard support for Desktop (WASD / Arrows).
-- 🏆 Local high score saving.
+- 🏆 Local high score saving with custom Player Name entry before you start!
 
 ## How to Play
 
