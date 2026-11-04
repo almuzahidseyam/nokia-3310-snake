@@ -27,6 +27,7 @@ interface FloatText { x: number; y: number; text: string; life: number; color: s
 export interface EngineCallbacks {
   onScore: (score: number, combo: number) => void;
   onGameOver: (score: number) => void;
+  onWin: (score: number) => void;
 }
 
 export class SnakeEngine {
@@ -34,7 +35,7 @@ export class SnakeEngine {
   prevSnake: Vec[] = [];
   dir: Dir = 'right';
   queue: Dir[] = [];
-  food: Vec = { x: 10, y: 10 };
+  food: Vec | null = null;
   bonus: { pos: Vec; ttl: number; max: number; type: BonusType } | null = null;
   score = 0;
   combo = 0;
@@ -42,6 +43,9 @@ export class SnakeEngine {
   running = false;
   paused = false;
   dead = false;
+  won = false;
+  private destroyed = false;
+  private timers = new Set<ReturnType<typeof setTimeout>>();
   tickMs = 150;
   acc = 0;
   lastTs = 0;
@@ -80,7 +84,26 @@ export class SnakeEngine {
   setTheme(t: ThemeType) { this.theme = t; this.c = THEMES[t]; }
   setDifficulty(d: Difficulty) { this.difficulty = d; this.updateSpeed(); }
 
-  destroy() { cancelAnimationFrame(this.raf); }
+  private clearTimers() {
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+  }
+
+  private later(callback: () => void, delay: number) {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      if (!this.destroyed) callback();
+    }, delay);
+    this.timers.add(timer);
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.running = false;
+    this.clearTimers();
+    cancelAnimationFrame(this.raf);
+    if (this.audio) void this.audio.close().catch(() => {});
+  }
 
   resize() {
     const size = Math.min(this.canvas.parentElement?.clientWidth ?? 400, this.canvas.parentElement?.clientHeight ?? 400);
@@ -94,6 +117,12 @@ export class SnakeEngine {
   }
 
   reset() {
+    this.clearTimers();
+    this.running = false;
+    this.won = false;
+    this.lastEatTime = -Infinity;
+    this.lastTs = performance.now();
+    this.slowTime = 0;
     const cy = Math.floor(ROWS / 2);
     this.snake = [{ x: 5, y: cy }, { x: 4, y: cy }, { x: 3, y: cy }];
     this.prevSnake = this.snake.map(s => ({ ...s }));
@@ -126,6 +155,7 @@ export class SnakeEngine {
   }
 
   start() {
+    if (this.destroyed) return;
     this.reset();
     this.running = true;
     this.lastTs = performance.now();
@@ -136,7 +166,7 @@ export class SnakeEngine {
     if (!this.audio) {
       try { this.audio = new (window.AudioContext || (window as any).webkitAudioContext)(); } catch { }
     }
-    if (this.audio?.state === 'suspended') this.audio.resume();
+    if (this.audio?.state === 'suspended') void this.audio.resume().catch(() => {});
   }
 
   beep(freq: number, dur = 0.06, type: OscillatorType = 'square', vol = 0.06) {
@@ -170,13 +200,18 @@ export class SnakeEngine {
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
       if (!this.snake.some(s => s.x === x && s.y === y) && !(this.bonus && this.bonus.pos.x === x && this.bonus.pos.y === y)) free.push({ x, y });
     }
-    this.food = free[Math.floor(Math.random() * free.length)] ?? { x: 0, y: 0 };
+    // A bonus must never reserve the last empty cell needed for normal food.
+    if (!free.length && this.bonus && !this.snake.some(s => s.x === this.bonus!.pos.x && s.y === this.bonus!.pos.y)) {
+      free.push(this.bonus.pos);
+      this.bonus = null;
+    }
+    this.food = free[Math.floor(Math.random() * free.length)] ?? null;
   }
 
   spawnBonus() {
     const free: Vec[] = [];
     for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      if (!this.snake.some(s => s.x === x && s.y === y) && !(this.food.x === x && this.food.y === y)) free.push({ x, y });
+      if (!this.snake.some(s => s.x === x && s.y === y) && !(this.food?.x === x && this.food?.y === y)) free.push({ x, y });
     }
     const pos = free[Math.floor(Math.random() * free.length)];
     const type = Math.random() > 0.5 ? 'points' : 'slow';
@@ -192,6 +227,7 @@ export class SnakeEngine {
   }
 
   step() {
+    if (!this.running || this.paused || this.dead || this.won || this.destroyed) return;
     if (this.queue.length) this.dir = this.queue.shift()!;
     const v = DIRS[this.dir];
     const head = this.snake[0];
@@ -200,7 +236,7 @@ export class SnakeEngine {
     this.prevSnake = this.snake.map(s => ({ ...s }));
 
     const hitWall = nh.x < 0 || nh.y < 0 || nh.x >= COLS || nh.y >= ROWS;
-    const willGrow = nh.x === this.food.x && nh.y === this.food.y;
+    const willGrow = nh.x === this.food?.x && nh.y === this.food?.y;
     const body = willGrow ? this.snake : this.snake.slice(0, -1);
     const hitSelf = body.some(s => s.x === nh.x && s.y === nh.y);
 
@@ -222,10 +258,18 @@ export class SnakeEngine {
       this.shake = Math.min(6, 2 + this.combo);
       this.flash = 0.35;
       this.beep(520 + this.combo * 60, 0.07);
-      setTimeout(() => this.beep(780 + this.combo * 60, 0.08), 60);
+      this.later(() => this.beep(780 + this.combo * 60, 0.08), 60);
       this.spawnFood();
-      if (this.eatenSinceBonus >= 5 && !this.bonus) { this.eatenSinceBonus = 0; this.spawnBonus(); }
       this.cb.onScore(this.score, this.combo);
+      if (this.snake.length === COLS * ROWS) {
+        this.won = true;
+        this.running = false;
+        this.bonus = null;
+        this.clearTimers();
+        this.cb.onWin(this.score);
+        return;
+      }
+      if (this.eatenSinceBonus >= 5 && !this.bonus) { this.eatenSinceBonus = 0; this.spawnBonus(); }
     } else {
       this.snake.pop();
     }
@@ -250,7 +294,7 @@ export class SnakeEngine {
         this.floats.push({ x: px, y: py, text: msg, life: 1.4, color: this.c.bonus });
         this.shake = 10;
         this.flash = 0.6;
-        [660, 880, 1100, 1320].forEach((f, i) => setTimeout(() => this.beep(f, 0.1), i * 50));
+        [660, 880, 1100, 1320].forEach((f, i) => this.later(() => this.beep(f, 0.1), i * 50));
         this.bonus = null;
         this.cb.onScore(this.score, this.combo);
       } else {
@@ -266,18 +310,20 @@ export class SnakeEngine {
   }
 
   die() {
+    if (this.dead || this.won || !this.running || this.destroyed) return;
     this.dead = true;
     this.shake = 14;
     this.flash = 0.8;
     this.deathT = 0;
     const h = this.snake[0];
     this.burst((h.x + 0.5) * this.cell, (h.y + 0.5) * this.cell, 30, this.c.text, 2);
-    [300, 250, 200, 120].forEach((f, i) => setTimeout(() => this.beep(f, 0.15, 'sawtooth', 0.08), i * 90));
+    [300, 250, 200, 120].forEach((f, i) => this.later(() => this.beep(f, 0.15, 'sawtooth', 0.08), i * 90));
     if (navigator.vibrate) navigator.vibrate([60, 40, 100]);
-    setTimeout(() => { this.running = false; this.cb.onGameOver(this.score); }, 900);
+    this.later(() => { this.running = false; this.cb.onGameOver(this.score); }, 900);
   }
 
   loop(ts: number) {
+    if (this.destroyed) return;
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, (ts - this.lastTs) / 1000 || 0);
     this.lastTs = ts;
@@ -285,7 +331,7 @@ export class SnakeEngine {
 
     if (this.running && !this.paused && !this.dead) {
       this.acc += dt * 1000;
-      while (this.acc >= this.tickMs) { this.acc -= this.tickMs; this.step(); if (this.dead) break; }
+      while (this.acc >= this.tickMs) { this.acc -= this.tickMs; this.step(); if (this.dead || !this.running) break; }
     }
     if (this.dead) this.deathT += dt;
 
@@ -325,15 +371,17 @@ export class SnakeEngine {
       c.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
     }
 
-    const t = this.paused ? 0 : Math.min(1, this.acc / this.tickMs);
+    const t = this.won ? 1 : Math.min(1, this.acc / this.tickMs);
     const lerp = (a: number, b: number) => a + (b - a) * t;
 
+    if (this.food) {
     const pulse = 1 + Math.sin(this.foodPulse * 8) * 0.12;
     const fs = cell * 0.7 * pulse;
     c.fillStyle = this.c.food;
     this.roundRect((this.food.x + 0.5) * cell - fs / 2, (this.food.y + 0.5) * cell - fs / 2, fs, fs, fs * 0.25);
     c.fill();
     c.fillRect((this.food.x + 0.5) * cell - cell * 0.06, (this.food.y + 0.5) * cell - fs / 2 - cell * 0.15, cell * 0.12, cell * 0.18);
+    }
 
     if (this.bonus) {
       const b = this.bonus;

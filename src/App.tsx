@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SnakeEngine, type Dir, type ThemeType, type Difficulty } from './game/engine';
+import { loadScores, loadName, saveName, saveScores, type HighScore } from './game/scores';
 
-type Screen = 'start' | 'playing' | 'paused' | 'gameover';
-interface HighScore { name: string; score: number; date: string; }
-const HS_KEY = 'nokia-snake-highscores';
-
-function loadScores(): HighScore[] {
-  try { return JSON.parse(localStorage.getItem(HS_KEY) || '[]'); } catch { return []; }
-}
-function saveScores(s: HighScore[]) { localStorage.setItem(HS_KEY, JSON.stringify(s)); }
+type Screen = 'start' | 'playing' | 'paused' | 'gameover' | 'won';
 
 const getThemeStyles = (t: ThemeType) => {
   if (t === 'modern-dark') return { text: '#e8ebff', overlay: 'rgba(15,18,32,0.88)', bg: '#0f1220', scanlines: false };
@@ -27,7 +21,9 @@ export default function App() {
   const [scores, setScores] = useState<HighScore[]>(loadScores);
   const [finalScore, setFinalScore] = useState(0);
   const [isNewBest, setIsNewBest] = useState(false);
-  const [name, setName] = useState(() => localStorage.getItem('nokia-snake-name') || 'YOU');
+  const [name, setName] = useState(loadName);
+  const recorded = useRef(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [muted, setMuted] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
@@ -47,6 +43,12 @@ export default function App() {
         setIsNewBest(s > 0 && (prev.length === 0 || s > prev[0].score));
         go('gameover');
       },
+      onWin: (s) => {
+        setFinalScore(s);
+        const prev = loadScores();
+        setIsNewBest(s > 0 && (prev.length === 0 || s > prev[0].score));
+        go('won');
+      },
     });
     engineRef.current = eng;
     const onResize = () => eng.resize();
@@ -64,6 +66,8 @@ export default function App() {
   const startGame = useCallback(() => {
     const e = engineRef.current; if (!e) return;
     e.start();
+    recorded.current = false;
+    setSaveFailed(false);
     setScore(0); setCombo(0);
     go('playing');
   }, []);
@@ -75,16 +79,17 @@ export default function App() {
   }, []);
 
   const submitScore = useCallback(() => {
-    if (finalScore <= 0) return;
+    if (finalScore <= 0 || recorded.current) return;
+    recorded.current = true;
     const nm = (name.trim() || 'YOU').toUpperCase().slice(0, 8);
-    localStorage.setItem('nokia-snake-name', nm);
+    saveName(nm);
     const next = [...loadScores(), { name: nm, score: finalScore, date: new Date().toLocaleDateString() }]
       .sort((a, b) => b.score - a.score).slice(0, 8);
-    saveScores(next);
+    setSaveFailed(!saveScores(next));
     setScores(next);
   }, [finalScore, name]);
 
-  useEffect(() => { if (screen === 'gameover') submitScore(); }, [screen, submitScore]);
+  useEffect(() => { if (screen === 'gameover' || screen === 'won') submitScore(); }, [screen, submitScore]);
 
   useEffect(() => {
     const map: Record<string, Dir> = {
@@ -92,11 +97,13 @@ export default function App() {
       w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right',
     };
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && (e.target.closest('input, select, [contenteditable="true"]') ||
+          ((e.key === ' ' || e.key === 'Enter') && e.target.closest('button')))) return;
       const eng = engineRef.current; if (!eng) return;
       const sc = screenRef.current;
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
-        if (sc === 'start' || sc === 'gameover') startGame();
+        if (sc === 'start' || sc === 'gameover' || sc === 'won') startGame();
         else togglePause();
         return;
       }
@@ -105,7 +112,7 @@ export default function App() {
       const d = map[e.key];
       if (d) {
         e.preventDefault();
-        if (sc === 'start' || sc === 'gameover') { startGame(); engineRef.current?.setDir(d); }
+        if (sc === 'start' || sc === 'gameover' || sc === 'won') { startGame(); engineRef.current?.setDir(d); }
         else if (sc === 'paused') { togglePause(); eng.setDir(d); }
         else eng.setDir(d);
       }
@@ -167,7 +174,7 @@ export default function App() {
           <div className="aspect-square w-full relative" style={{ backgroundColor: ts.bg }}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
             onClick={() => { if (screen === 'playing') togglePause(); }}>
-            <canvas ref={canvasRef} className="block touch-none" />
+            <canvas ref={canvasRef} aria-label="Snake game board. Use arrow keys or the direction buttons to move." className="block touch-none" />
             {ts.scanlines && (
               <div className="pointer-events-none absolute inset-0 opacity-30"
                 style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(15,56,15,.15) 0 1px, transparent 1px 3px)' }} />
@@ -180,13 +187,13 @@ export default function App() {
                 <div style={{ color: ts.text }} className="text-[9px] mb-3 opacity-80">II · MODERN EDITION</div>
                 
                 <div className="flex gap-2 mb-3 w-full max-w-[200px]">
-                  <select value={theme} onChange={e => setTheme(e.target.value as ThemeType)}
+                  <select aria-label="Theme" value={theme} onChange={e => setTheme(e.target.value as ThemeType)}
                     className="flex-1 bg-transparent border-2 border-current p-1 text-[8px] outline-none" style={{ color: ts.text, borderColor: ts.text }}>
                     <option value="retro">RETRO</option>
                     <option value="modern-dark">NEON DARK</option>
                     <option value="modern-light">LIGHT</option>
                   </select>
-                  <select value={difficulty} onChange={e => setDifficulty(e.target.value as Difficulty)}
+                  <select aria-label="Difficulty" value={difficulty} onChange={e => setDifficulty(e.target.value as Difficulty)}
                     className="flex-1 bg-transparent border-2 border-current p-1 text-[8px] outline-none" style={{ color: ts.text, borderColor: ts.text }}>
                     <option value="easy">EASY</option>
                     <option value="medium">MEDIUM</option>
@@ -196,11 +203,11 @@ export default function App() {
 
                 <div className="flex flex-col items-center gap-1 mb-4">
                   <div style={{ color: ts.text }} className="text-[8px]">PLAYER NAME</div>
-                  <input value={name} maxLength={8} placeholder="YOU"
+                  <input aria-label="Player name" value={name} maxLength={8} placeholder="YOU"
                     onChange={e => {
                       const val = e.target.value.toUpperCase();
                       setName(val);
-                      localStorage.setItem('nokia-snake-name', val.trim() || 'YOU');
+                      saveName(val.trim() || 'YOU');
                     }}
                     onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') startGame(); }}
                     className="bg-transparent border-2 p-1 w-24 text-center outline-none uppercase"
@@ -217,13 +224,15 @@ export default function App() {
                 <button onClick={startGame} className="pixel-btn mt-2 text-[9px]" style={{ color: ts.bg, backgroundColor: ts.text }}>RESTART</button>
               </Overlay>
             )}
-            {screen === 'gameover' && (
+            {(screen === 'gameover' || screen === 'won') && (
               <Overlay bg={ts.overlay}>
-                <div style={{ color: ts.text }} className="text-xl mb-1 animate-shake">GAME OVER</div>
+                <div role="status" style={{ color: ts.text }} className="text-xl mb-1">{screen === 'won' ? 'YOU WIN' : 'GAME OVER'}</div>
+                {screen === 'won' && <div style={{ color: ts.text }} className="text-[9px] mb-1">ALL 400 CELLS FILLED</div>}
                 {isNewBest && <div style={{ color: ts.text }} className="text-[10px] mb-1 animate-blink">★ NEW HIGH SCORE ★</div>}
                 <div style={{ color: ts.text }} className="text-3xl my-2">{finalScore}</div>
                 <button onClick={startGame} className="pixel-btn animate-blink" style={{ color: ts.bg, backgroundColor: ts.text }}>↻ PLAY AGAIN</button>
                 <ScoreTable scores={scores.slice(0, 4)} highlight={finalScore} color={ts.text} />
+                {saveFailed && <p role="status" style={{ color: ts.text }} className="text-[8px] mt-2">Score could not be saved on this device.</p>}
               </Overlay>
             )}
           </div>
@@ -251,7 +260,7 @@ export default function App() {
 
 function Overlay({ children, bg }: { children: React.ReactNode; bg: string }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 animate-fadein" style={{ backgroundColor: bg }}>
+    <div onClick={e => e.stopPropagation()} className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 animate-fadein" style={{ backgroundColor: bg }}>
       {children}
     </div>
   );
@@ -259,7 +268,8 @@ function Overlay({ children, bg }: { children: React.ReactNode; bg: string }) {
 
 function DBtn({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <button onPointerDown={(e) => { e.preventDefault(); onPress(); }}
+    <button aria-label={({ '▲': 'Move up', '◀': 'Move left', '▶': 'Move right', '▼': 'Move down' })[label]}
+      onClick={e => { if (e.detail === 0) onPress(); }} onPointerDown={(e) => { e.preventDefault(); onPress(); }}
       className="h-14 rounded-xl text-slate-200 text-lg active:scale-90 active:bg-slate-600 transition-transform touch-none"
       style={{ background: 'linear-gradient(180deg,#4a525e,#2b3038)', boxShadow: '0 4px 0 #14171b, inset 0 1px 0 rgba(255,255,255,.15)' }}>
       {label}

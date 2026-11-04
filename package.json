@@ -8,9 +8,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:browser": "node tests/browser.cjs"
   },
   "dependencies": {
+    "@fontsource/press-start-2p": "5.3.0",
     "clsx": "2.1.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -22,9 +26,11 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
+    "playwright": "^1.64.1",
     "tailwindcss": "4.1.17",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
-    "vite": "7.3.2",
+    "vite": "7.3.7",
     "vite-plugin-singlefile": "2.3.0"
   }
 }

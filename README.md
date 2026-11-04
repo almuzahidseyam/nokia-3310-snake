@@ -1,55 +1,39 @@
-# Nokia 3310 Snake Game
+# Nokia 3310 Snake
 
-A web-based clone of the classic Snake II from the Nokia 3310. Built with React, Vite, and TailwindCSS.
+A Nokia-inspired browser game with a 20 by 20 board, three themes and three difficulty levels. The combo and bonus rules are this game's own additions, not an exact recreation of the original phone game.
 
-## Features
-- 🎮 Retro graphics with LCD scanlines and colors.
-- 🔊 Original Snake II mechanics and sound effects.
-- 📱 Touch swipe and D-Pad controls for mobile devices.
-- ⌨️ Keyboard support for Desktop (WASD / Arrows).
-- 🏆 Local high score saving with custom Player Name entry before you start!
+## Play
 
-## How to Play
+Use arrow keys or WASD, swipe, or the direction buttons. Space/P pauses or resumes; R restarts. Choose your theme, difficulty and player name before starting.
 
-### Desktop
-- Use **Arrow keys** or **W A S D** to move the snake.
-- Press **Space** to pause/resume.
-- Press **R** to restart the game.
+Eat food to grow. Each food awards 10 points multiplied by a quick-eating combo, capped at five. Bonus items award points or temporarily slow the snake. Hitting a wall or your body ends the run; filling all 400 cells wins. Moving into the departing tail is allowed.
 
-### Mobile
-- **Swipe** on the screen to change direction.
-- Use the on-screen **D-Pad** buttons to move.
-- Tap the **PAUSE** soft key to pause/resume.
+Restart clears pending effects and callbacks from the previous run. Hiding the tab pauses play. Scores are saved on this device only; unavailable storage does not block play and a failed score save is shown on screen.
 
-## Development Setup
+## Run locally
 
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd polished-snake-game-development
-   ```
+Requires Node.js 24 and npm.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-## Build
-
-To create a production build (single HTML file):
-```bash
-npm run build
+```sh
+git clone https://github.com/almuzahidseyam/nokia-3310-snake.git
+cd nokia-3310-snake
+npm ci
+npm run dev
 ```
-The output will be inside the `dist/` directory.
 
-## License
+`npm run build` produces `dist/index.html`, including the game and its font. The built game does not need a font service or network requests to play. Press Start 2P is distributed under the SIL Open Font License by the bundled `@fontsource/press-start-2p` package.
 
-MIT
+## Verification
 
----
-*Created by [almuzahidseyam](https://github.com/almuzahidseyam)*
+```sh
+npm run typecheck
+npm test
+npm run build
+npx playwright install --with-deps chromium
+npm run test:browser
+npm audit --audit-level=low
+```
+
+The browser script uses installed Chrome locally and Playwright Chromium in CI. Tests cover full-board victory, the last free cell, collision/tail rules, direction queues, pause, stale death callbacks, storage failures, mobile layout and actual canvas rendering. Windows/Linux CI runs these checks; deployment repeats checks before publishing. These checks do not establish accessibility for nonvisual gameplay: the board is still a visual canvas game.
+
+MIT. See [LICENSE](LICENSE).
